@@ -134,5 +134,35 @@ export PATH=\\$PATH:\\$HADOOP_HOME/bin:\\$HADOOP_HOME/sbin
 EOF
 
 
+    ###### 安装本地模式 Hive-1.2.2 -- 参考 https://www.polarxiong.com/archives/%E5%AE%89%E8%A3%85Hive-1-2-1%E5%88%B0Ubuntu-16-04%E6%95%99%E7%A8%8B.html
+    curl -O http://www-us.apache.org/dist/hive/hive-1.2.2/apache-hive-1.2.2-bin.tar.gz
+    md5sum apache-hive-1.2.2-bin.tar.gz
+    tar -zxf apache-hive-1.2.2-bin.tar.gz --transform 's|^apache-hive-1.2.2-bin|hive|' -C /usr/local/
+    rm -f apache-hive-1.2.2-bin.tar.gz
+    cp -an /usr/local/hive/conf/hive-env.sh.template /usr/local/hive/conf/hive-env.sh
+    sed -i 's|# HADOOP_HOME=.*|HADOOP_HOME=/usr/local/hadoop|' /usr/local/hive/conf/hive-env.sh
+    cp -an /usr/local/hive/conf/hive-default.xml.template /usr/local/hive/conf/hive-default.xml
+    cat >/usr/local/hive/conf/hive-site.xml <<\EOF
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+  <property>
+    <name>mapreduce.framework.name</name>
+    <value>local</value>
+  </property>
+  <property>
+    <name>mapred.local.dir</name>
+    <value>/tmp/hadoop/mapred/local</value>
+  </property>
+</configuration>
+EOF
+    chown -R hadoop: /usr/local/hive/
+    cat >/etc/profile.d/hive.sh <<\EOF
+export HIVE_HOME=/usr/local/hive
+export HIVE_CONF_DIR=\\$HIVE_HOME/conf
+export PATH=\\$PATH:\\$HIVE_HOME/bin
+EOF
+
+
   SHELL
 end

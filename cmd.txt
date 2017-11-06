@@ -17,3 +17,20 @@ hdfs dfs -cat output/*
 hdfs dfs -get output /usr/local/hadoop/output
 cat /usr/local/hadoop/output/*
 
+
+# 启动 hive
+hive
+# 在 hive 控制台中执行 -- 创建表，导入本地文件系统中的数据，执行查询，结果保存在 hdfs，导出结果到本地文件系统
+CREATE TABLE invites (foo INT, bar STRING) PARTITIONED BY (ds STRING);
+SHOW TABLES;
+DESCRIBE invites;
+ALTER TABLE invites ADD COLUMNS (new_col2 INT COMMENT 'a comment');
+ALTER TABLE invites REPLACE COLUMNS (foo INT, bar STRING, baz INT COMMENT 'baz replaces new_col2');
+LOAD DATA LOCAL INPATH '/usr/local/hive/examples/files/kv2.txt' OVERWRITE INTO TABLE invites PARTITION (ds='2008-08-15');
+LOAD DATA LOCAL INPATH '/usr/local/hive/examples/files/kv3.txt' OVERWRITE INTO TABLE invites PARTITION (ds='2008-08-08');
+SELECT a.foo FROM invites a WHERE a.ds='2008-08-15';
+INSERT OVERWRITE DIRECTORY '/tmp/hdfs_out' SELECT a.* FROM invites a WHERE a.ds='2008-08-15';
+DROP TABLE invites;
+dfs -cat /tmp/hdfs_out/*;
+
+
