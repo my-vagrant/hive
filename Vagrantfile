@@ -172,6 +172,11 @@ EOF
     <name>mapred.local.dir</name>
     <value>/tmp/hadoop/mapred/local</value>
   </property>
+  <property>
+    <name>javax.jdo.option.ConnectionURL</name>
+    <value>jdbc:derby:;databaseName=/usr/local/hive/metastore_db;create=true</value>
+    <description>JDBC connect string for a JDBC metastore</description>
+  </property>
 </configuration>
 EOF
     chown -R hadoop: /usr/local/hive/
