@@ -1,0 +1,19 @@
+
+# 启动 HDFS -- 主要包括 NameNode 和 DataNode 进程
+/usr/local/hadoop/sbin/start-dfs.sh
+jps
+
+# 查看 NameNode 相关信息
+curl http://localhost:50070/
+
+# 将本地文件系统中的xml文件导入到 hdfs，执行示例，再将结果从 hdfs 导出到本地文件系统
+hdfs dfs -mkdir -p /user/hadoop
+hdfs dfs -mkdir -p input
+hdfs dfs -put /usr/local/hadoop/etc/hadoop/*.xml input
+hdfs dfs -ls input
+hdfs dfs -rm -r -f output
+hadoop jar /usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-*.jar grep input output 'dfs[a-z.]+'
+hdfs dfs -cat output/*
+hdfs dfs -get output /usr/local/hadoop/output
+cat /usr/local/hadoop/output/*
+
