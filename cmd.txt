@@ -1,6 +1,7 @@
 
-# 启动 HDFS -- 主要包括 NameNode 和 DataNode 进程
-/usr/local/hadoop/sbin/start-dfs.sh
+# 启动 HDFS 和 YARN -- 主要包括 NameNode DataNode NodeManager ResourceManager 进程
+/usr/local/hadoop/sbin/start-dfs.sh; /usr/local/hadoop/sbin/start-yarn.sh
+
 jps
 
 # 查看 NameNode 相关信息
@@ -32,5 +33,4 @@ SELECT a.foo FROM invites a WHERE a.ds='2008-08-15';
 INSERT OVERWRITE DIRECTORY '/tmp/hdfs_out' SELECT a.* FROM invites a WHERE a.ds='2008-08-15';
 DROP TABLE invites;
 dfs -cat /tmp/hdfs_out/*;
-
 

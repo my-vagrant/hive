@@ -22,7 +22,8 @@ Vagrant.configure("2") do |config|
   #config.proxy.no_proxy = "localhost,127.0.0.1,myhive"
 
   config.vm.provider "virtualbox" do |v|
-    v.memory = 2048
+    v.cpus = 2
+    v.memory = 4096
   end
 
   # Disable automatic box update checking. If you disable this, then
@@ -125,6 +126,23 @@ EOF
     </property>
 </configuration>
 EOF
+    cat >/usr/local/hadoop/etc/hadoop/mapred-site.xml <<\EOF
+<configuration>
+    <property>
+        <name>mapreduce.framework.name</name>
+        <value>yarn</value>
+    </property>
+</configuration>
+EOF
+    cp -an /usr/local/hadoop/etc/hadoop/yarn-site.xml /usr/local/hadoop/etc/hadoop/yarn-site.xml.cyp
+    cat >/usr/local/hadoop/etc/hadoop/yarn-site.xml <<\EOF
+<configuration>
+    <property>
+        <name>yarn.nodemanager.aux-services</name>
+        <value>mapreduce_shuffle</value>
+    </property>
+</configuration>
+EOF
     chown -R hadoop: /usr/local/hadoop/
     su - hadoop -c "/usr/local/hadoop/bin/hdfs namenode -format"
     cat >/etc/profile.d/hadoop.sh <<\EOF
@@ -148,7 +166,7 @@ EOF
 <configuration>
   <property>
     <name>mapreduce.framework.name</name>
-    <value>local</value>
+    <value>yarn</value>
   </property>
   <property>
     <name>mapred.local.dir</name>
