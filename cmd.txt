@@ -34,3 +34,6 @@ INSERT OVERWRITE DIRECTORY '/tmp/hdfs_out' SELECT a.* FROM invites a WHERE a.ds=
 DROP TABLE invites;
 dfs -cat /tmp/hdfs_out/*;
 
+
+# 设置 hive CLI，查询时显示表的列名
+echo "set hive.cli.print.header=true;" >>~/.hiverc
