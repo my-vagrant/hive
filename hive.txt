@@ -1,0 +1,237 @@
+
+# Hive 中数据库的概念本质上仅仅是表的一个目录或者命名空间。
+# Hive 会为每个数据库创建一个目录。数据库中的表将会以这个数据库目录的子目录形式存储。数据库目录以.db结尾。
+# 数据库所在的目录默认位于属性 hive.metastore.warehouse.dir 所指定的顶层目录之后。
+# default 数据库没有自己的目录。
+
+-- 列出数据库
+SHOW DATABASES;
+SHOW DATABASES LIKE 'd.*';
+
+-- 创建数据库
+CREATE DATABASE mydb;
+DESCRIBE DATABASE mydb;
+
+-- 注意 COMMENT LOCATION 顺序
+CREATE DATABASE IF NOT EXISTS mydb2
+COMMENT 'Holds all my tables'
+LOCATION '/my/preferred/directory'
+WITH DBPROPERTIES('creator' = 'custa', 'date' = '2017-11-07');
+DESCRIBE DATABASE EXTENDED mydb2;
+
+ALTER DATABASE mydb2 SET DBPROPERTIES('edited-by' = 'me');
+
+-- 删除数据库（包括表）
+DROP DATABASE IF EXISTS mydb;
+DROP DATABASE IF EXISTS mydb2 CASCADE;
+
+-- 设置当前工作数据库
+USE mydb;
+set hive.cli.print.current.db=true;
+
+
+-- 列出表
+SHOW TABLES;
+SHOW TABLES IN mydb;
+SHOW TABLES 'mydb.*'; -- 无效
+
+
+-- 需要先创建数据库
+CREATE DATABASE IF NOT EXISTS mydb;
+CREATE TABLE IF NOT EXISTS mydb.employees (
+  name          STRING    COMMENT 'Employee name',
+  salary        FLOAT    COMMENT 'Employee salary',
+  subordinates  ARRAY<STRING>    COMMENT 'Names of subordinates',
+  deductions    MAP<STRING, FLOAT>    COMMENT 'Keys are deductions names, values are percentages',
+  address       STRUCT<street:STRING, city:STRING, state:STRING, zip:INT>    COMMENT 'Home address'
+)
+COMMENT 'Description of the table'
+LOCATION '/user/hive/warehouse/mydb.db/employees'
+TBLPROPERTIES ( 'creator'='me', 'created_at'='2017-11-08 14:12:00' );
+
+SHOW TBLPROPERTIES mydb.employees;
+DESCRIBE mydb.employees;
+DESCRIBE EXTENDED mydb.employees;
+DESCRIBE FORMATTED mydb.employees;
+DESCRIBE mydb.employees.salary; -- 无效
+
+
+-- 拷贝表模式
+CREATE TABLE IF NOT EXISTS mydb.employees2 LIKE mydb.employees;
+
+
+-- 删除表
+DROP TABLE mydb.employees;
+
+
+-- 创建外部表，LOCATION 可选？
+CREATE EXTERNAL TABLE IF NOT EXISTS mydb.stocks (
+  symbol   STRING,
+  ymd      STRING
+)
+LOCATION '/data/stocks';
+
+-- 可以查看表类型 -- tableType:EXTERNAL_TABLE
+DESCRIBE EXTENDED mydb.stocks;
+
+
+-- 分区表
+CREATE TABLE mydb.employees (
+  name         STRING,
+  salary       FLOAT,
+  subordinates ARRAY<STRING>,
+  deductions   MAP<STRING, FLOAT>,
+  address      STRUCT<street:STRING, city:STRING, state:STRING, zip:INT>
+)
+PARTITIONED BY (country STRING, state STRING);
+
+dfs -ls /user/hive/warehouse/mydb.db/employees;
+
+-- 查看存在的分区
+SHOW PARTITIONS mydb.employees;
+-- 是否存在某个特定分区键的分区
+SHOW PARTITIONS mydb.employees PARTITION(country='US');
+
+
+-- 载入数据创建分区
+LOAD DATA LOCAL INPATH '${env:HOME}/california-employees'
+INTO TABLE employees
+PARTITION (country='US', state='CA');
+
+CREATE EXTERNAL TABLE IF NOT EXISTS log_messages (
+  hms INT,
+  severity STRING,
+  server STRING,
+  process_id INT,
+  message STRING
+)
+PARTITIONED BY (year INT, month INT, day INT)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY '\t';
+
+-- 通过 ALTER TABLE 增加分区
+ALTER TABLE log_messages ADD PARTITION( year=2012, month=1, day=2)
+LOCATION '/data/log_messages/2012/01/02';
+
+-- 修改分区路径
+ALTER TABLE log_messages PARTITION( year=2011, month=12, day=2)
+SET LOCATION 's3n://ourbucket/logs/2011/01/02';
+
+-- 查看分区数据所在的路径
+DESCRIBE EXTENDED log_messages PARTITION (year=2012, month=1, day=2);
+
+-- 删除分区
+ALTER TABLE log_messages DROP IF EXISTS PARTITION( year=2011, month=12, day=2);
+
+-- 删除表
+DROP TABLE IF EXISTS log_messages;
+
+-- 重命名表
+ALTER TABLE log_messages RENAME TO logmsgs;
+
+
+-- 装载数据
+LOAD DATA LOCAL INPATH '${env:HOME}/california-employees'
+OVERWRITE INTO TABLE employees
+PARTITION ( country='US', state='CA' );
+
+LOAD DATA LOCAL… 拷贝本地数据到位于分布式文件系统上的目标位置，
+而LOAD DATA… (也就是没有使用LOCAL)转移数据到目标位置。
+
+
+-- 通过查询向表/分区插入数据
+INSERT OVERWRITE TABLE employees
+PARTITION (country='US', state='OR')
+SELECT * FROM staged_employees se
+WHERE se.cnty='US' AND se.st='OR';
+
+
+
+-- 扫描一次输入数据，插入到多个位置
+FROM staged_employees se
+INSERT OVERWRITE TABLE employees
+  PARTITION (country='US', state='OR')
+  SELECT * WHERE se.cnty='US' AND se.st='OR'
+INSERT OVERWRITE TABLE employees
+  PARTITION (country='US', state='CA')
+  SELECT * WHERE se.cnty='US' AND se.st='CA'
+INSERT OVERWRITE TABLE employees
+  PARTITION (country='US', state='IL')
+  SELECT * WHERE se.cnty='US' AND se.st='IL';
+
+
+-- 动态分区插入
+INSERT OVERWRITE TABLE employees
+PARTITION (country, state)
+SELECT ..., se.cnty, se.st
+FROM staged_ employees se;
+
+-- 混用静态和动态分区，静态分区必须在动态分区之前
+INSERT OVERWRITE TABLE employees
+PARTITION (country='US', state)
+SELECT ..., se.cnty, se.st
+FROM staged_employees se
+WHERE se.cnty = 'US';
+
+
+-- 创建表并加载数据
+CREATE TABLE ca_employees
+AS SELECT name, salary, address
+FROM employees WHERE se.state='CA';
+
+-- 导出数据
+INSERT OVERWRITE LOCAL DIRECTORY '/tmp/ca_employees'
+SELECT name, salary, address
+FROM employees
+WHERE se.state='CA';
+
+
+
+# 本地文件系统生成职员数据文件
+cat >/home/hadoop/employees.data <<EOF
+John Doe=100000.0=Mary Smith,Todd Jones=Federal Taxes:0.2,State Taxes:0.05,Insurance:0.1=1 Michigan Ave.,Chicago,IL,60600
+Mary Smith=80000.0=Bill King=Federal Taxes:0.2,State Taxes:0.05,Insurance:0.1=100 Ontario St.,Chicago,IL,60601
+Todd Jones=70000.0==Federal Taxes:0.15,State Taxes:0.03,Insurance:0.1=200 Chicago Ave.,Oak Park,IL,60700
+Bill King=60000.0==Federal Taxes:0.15,State Taxes:0.03,Insurance:0.1=300 Obscure Dr.,Obscuria,IL,60100
+EOF
+
+-- 创建职员表
+DROP TABLE employees;
+CREATE TABLE employees (
+  name         STRING,
+  salary       FLOAT,
+  subordinates ARRAY< STRING>,
+  deductions   MAP< STRING, FLOAT>,
+  address      STRUCT<street:STRING, city:STRING, state:STRING, zip:INT>
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY '='
+COLLECTION ITEMS TERMINATED BY ','
+MAP KEYS TERMINATED BY ':'
+LINES TERMINATED BY '\n' STORED AS TEXTFILE;
+
+-- 导入职员数据
+LOAD DATA LOCAL INPATH '${env:HOME}/employees.data'
+OVERWRITE INTO TABLE employees;
+or
+dfs -put -f /home/hadoop/employees.data /user/hive/warehouse/employees;
+
+-- 查询
+SELECT
+  name,
+  subordinates[0],
+  deductions["State Taxes"],
+  address.city
+FROM employees;
+
+
+
+-- 表生成函数
+SELECT explode(subordinates) AS sub FROM employees;
+SELECT parse_url_tuple(url, 'HOST', 'PATH', 'QUERY') as (host, path, query) FROM url_table;
+
+
+
+
+
+
+
